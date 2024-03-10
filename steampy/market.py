@@ -10,7 +10,8 @@ from steampy.exceptions import ApiException, TooManyRequests
 from steampy.models import Currency, SteamUrl, GameOptions
 from steampy.utils import (
     text_between,
-    get_buy_order_history_from_html,
+    get_history_row_to_price_from_html,
+    get_assets_to_history_row_from_html,
     get_listing_id_to_assets_address_from_html,
     get_market_listings_from_html,
     merge_items_with_descriptions_from_listing,
@@ -61,26 +62,36 @@ class SteamMarket:
     
     @login_required
     def get_my_buy_order_history(self) -> dict:
-        asset_price_dict = {}
+        asset_name_to_price_dict = {}
         start = 0
         page_size = 10
         n_total = 10
         while start < n_total:
             url = f'{SteamUrl.COMMUNITY_URL}/market/myhistory/render/?query=&start={start}&count={page_size}'
             response = self._session.get(url=url)
-            if response.status_code != HTTPStatus.OK:
-                raise ApiException(f'There was a problem getting the listings. HTTP code: {response.status_code}')
             jresp = response.json()
-            result = get_buy_order_history_from_html(jresp['results_html'])
-            for name in result:
-                if name in asset_price_dict:
-                    asset_price_dict[name].extend(result[name])
-                else:
-                    asset_price_dict[name] = result[name]
             if start == 0:
                 n_total = int(jresp['total_count'])
             start += page_size
-        return asset_price_dict
+
+            if response.status_code != HTTPStatus.OK:
+                raise ApiException(f'There was a problem getting the listings. HTTP code: {response.status_code}')
+            if GameOptions.CS.app_id not in jresp['assets']:
+                # Skip processing non-cs assets
+                continue
+            cs_assets_dict = jresp['assets'][GameOptions.CS.app_id][GameOptions.CS.context_id]
+            asset_to_history_row = get_assets_to_history_row_from_html(jresp['hovers'])
+            history_row_to_price = get_history_row_to_price_from_html(jresp['results_html'])
+            asset_to_price_dict = {k1: history_row_to_price[v1] for k1, v1 in asset_to_history_row.items() if v1 in history_row_to_price}
+            for assetid, price in asset_to_price_dict.items():
+                cs_assets_dict[assetid]['price'] = price
+            for item in cs_assets_dict.values():
+                if item['market_hash_name'] in asset_name_to_price_dict:
+                    asset_name_to_price_dict[item['market_hash_name']].append(item['price'])
+                else:
+                    asset_name_to_price_dict[item['market_hash_name']] = [item['price']]
+
+        return asset_name_to_price_dict
         
     @login_required
     def get_my_market_listings(self) -> dict:

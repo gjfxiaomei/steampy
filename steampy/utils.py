@@ -180,20 +180,17 @@ def get_market_listings_from_html(html: str) -> dict:
     return {'buy_orders': buy_orders_dict, 'sell_listings': sell_listings_dict}
 
 
-def get_buy_order_history_from_html(html: str) -> dict:
-    asset_price_dict = {}
+def get_history_row_to_price_from_html(html: str) -> dict:
+    history_row_price_dict = {}
     document = BeautifulSoup(html, 'html.parser')
     nodes = document.find_all('div', {'class': 'market_listing_row market_recent_listing_row'})
     for node in nodes:
-        name = node.find('span', {'class': 'market_listing_item_name'}).text.replace('\t', '').strip()
+        history_row = node.attrs['id']
         price = float(node.find('span', {'class': 'market_listing_price'}).text.replace('\t', '').strip().split(' ')[-1])
         date = node.find('div', {'class': 'market_listing_listed_date_combined'}).text
         if 'Purchased' in date or '已购买' in date:
-            if name in asset_price_dict:
-                asset_price_dict[name].append(price)
-            else:
-                asset_price_dict[name] = [price]
-    return asset_price_dict
+            history_row_price_dict[history_row] = price
+    return history_row_price_dict
 
 
 def get_sell_listings_from_node(node: Tag) -> dict:
@@ -237,6 +234,16 @@ def get_buy_orders_from_node(node: Tag) -> dict:
         buy_orders_dict[order['order_id']] = order
 
     return buy_orders_dict
+
+
+def get_assets_to_history_row_from_html(html: str) -> dict:
+    assets_to_history_row = {}
+    regex = "CreateItemHoverFromContainer\( [\w]+, '(history_row_[\d]+_[\d]+)_name', ([\d]+), '([\d]+)', '([\d]+)', [\d]+ \);"
+    for match in re.findall(regex, html):
+        if match[3] in assets_to_history_row:
+            continue
+        assets_to_history_row[match[3]] = match[0]
+    return assets_to_history_row
 
 
 def get_listing_id_to_assets_address_from_html(html: str) -> dict:
