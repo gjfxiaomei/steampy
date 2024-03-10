@@ -180,6 +180,22 @@ def get_market_listings_from_html(html: str) -> dict:
     return {'buy_orders': buy_orders_dict, 'sell_listings': sell_listings_dict}
 
 
+def get_buy_order_history_from_html(html: str) -> dict:
+    asset_price_dict = {}
+    document = BeautifulSoup(html, 'html.parser')
+    nodes = document.find_all('div', {'class': 'market_listing_row market_recent_listing_row'})
+    for node in nodes:
+        name = node.find('span', {'class': 'market_listing_item_name'}).text.replace('\t', '').strip()
+        price = float(node.find('span', {'class': 'market_listing_price'}).text.replace('\t', '').strip().split(' ')[-1])
+        date = node.find('div', {'class': 'market_listing_listed_date_combined'}).text
+        if 'Purchased' in date or '已购买' in date:
+            if name in asset_price_dict:
+                asset_price_dict[name].append(price)
+            else:
+                asset_price_dict[name] = [price]
+    return asset_price_dict
+
+
 def get_sell_listings_from_node(node: Tag) -> dict:
     sell_listings_raw = node.findAll('div', {'id': re.compile('mylisting_\d+')})
     sell_listings_dict = {}

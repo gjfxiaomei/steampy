@@ -10,6 +10,7 @@ from steampy.exceptions import ApiException, TooManyRequests
 from steampy.models import Currency, SteamUrl, GameOptions
 from steampy.utils import (
     text_between,
+    get_buy_order_history_from_html,
     get_listing_id_to_assets_address_from_html,
     get_market_listings_from_html,
     merge_items_with_descriptions_from_listing,
@@ -57,7 +58,30 @@ class SteamMarket:
             raise TooManyRequests('You can fetch maximum 20 prices in 60s period')
 
         return response.json()
-
+    
+    @login_required
+    def get_my_buy_order_history(self) -> dict:
+        asset_price_dict = {}
+        start = 0
+        page_size = 10
+        n_total = 10
+        while start < n_total:
+            url = f'{SteamUrl.COMMUNITY_URL}/market/myhistory/render/?query=&start={start}&count={page_size}'
+            response = self._session.get(url=url)
+            if response.status_code != HTTPStatus.OK:
+                raise ApiException(f'There was a problem getting the listings. HTTP code: {response.status_code}')
+            jresp = response.json()
+            result = get_buy_order_history_from_html(jresp['results_html'])
+            for name in result:
+                if name in asset_price_dict:
+                    asset_price_dict[name].extend(result[name])
+                else:
+                    asset_price_dict[name] = result[name]
+            if start == 0:
+                n_total = int(jresp['total_count'])
+            start += page_size
+        return asset_price_dict
+        
     @login_required
     def get_my_market_listings(self) -> dict:
         response = self._session.get(f'{SteamUrl.COMMUNITY_URL}/market')
