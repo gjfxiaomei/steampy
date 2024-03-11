@@ -61,17 +61,17 @@ class SteamMarket:
         return response.json()
     
     @login_required
-    def get_my_buy_order_history(self) -> dict:
+    def get_my_buy_order_history(self, max_query_count: int = 100) -> dict:
         asset_name_to_price_dict = {}
         start = 0
         page_size = 10
-        n_total = 10
+        n_total = page_size
         while start < n_total:
             url = f'{SteamUrl.COMMUNITY_URL}/market/myhistory/render/?query=&start={start}&count={page_size}'
             response = self._session.get(url=url)
             jresp = response.json()
             if start == 0:
-                n_total = int(jresp['total_count'])
+                n_total = min(int(jresp['total_count']), max_query_count)
             start += page_size
 
             if response.status_code != HTTPStatus.OK:
